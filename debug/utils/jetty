@@ -1,0 +1,128 @@
+#!/bin/bash
+
+# this script is used to configure jetty
+
+# get the current repository
+if [ -z "$repository" ]; then
+    repository=$(cd $(dirname "$0")/../.. && pwd)
+fi
+
+jetty_home=/opt/jetty
+jetty_file="$repository/web/jetty/JETTY.tar.gz"
+
+jetty_dir=/tmp/hcba/jetty
+function get_jetty_file {
+    if [[ ! -f $jetty_file ]]; then
+        mkdir -p $jetty_dir
+        jetty_name=$(basename $jetty_file)
+        wget -O $jetty_dir/$jetty_name $jetty_file
+        jetty_file="$jetty_dir/$jetty_name"
+    fi
+}
+
+function configure_jetty {
+    get_jetty_file
+    useradd -m jetty
+    mkdir -p $jetty_home
+
+    # download and configure jetty
+    tar -zxvf $jetty_file -C $jetty_home --strip-component 1
+    ln -s $jetty_home/bin/jetty.sh /etc/init.d/jetty
+    echo "JETTY_HOME=$jetty_home" > /etc/default/jetty
+    echo "JETTY_USER=jetty" >> /etc/default/jetty
+    echo "JETTY_PORT=8080" >> /etc/default/jetty
+    echo "JETTY_HOST=127.0.0.1" >> /etc/default/jetty
+    echo "JETTY_LOGS=$jetty_home/logs/" >> /etc/default/jetty
+
+    chown -R jetty:jetty $jetty_home
+
+    chkconfig --add jetty
+    chkconfig --level 345 jetty on
+    service jetty start
+}
+
+function configure_jetty_appstore {
+    war_home="${jetty_home}/webapps/appstore"
+    war_file="$repository/web/hcba_appstore/war/HCBA-APPSTORE.war"
+    if [[ ! -f $war_file ]]; then
+        mkdir -p $jetty_dir
+        war_name=$(basename $war_file)
+        wget -O $jetty_dir/$war_name $war_file
+        war_file=$jetty_dir/$war_name
+    fi
+    dbhost_orig=localhost
+    dbport_orig=3306
+    dbname_orig=appstore
+    dbusername_orig=root
+    dbpassword_orig=root
+    dbpersistence=${war_home}/WEB-INF/classes/persistence-mysql.properties
+    mkdir -p $war_home
+    unzip -o ${war_file} -d ${war_home}
+    sed -i "s%${dbhost_orig}:${dbport_orig}/${dbname_orig}%${db_host}:${db_port}/${db_name}%g" ${dbpersistence}
+    sed -i "s%jdbc.user=${dbusername_orig}%jdbc.user=${db_username}%g" ${dbpersistence}
+    sed -i "s%jdbc.pass=${dbpassword_orig}%jdbc.pass=${db_password}%g" ${dbpersistence}
+    sed -i "s%hibernate.connection.username=${dbusername_orig}%hibernate.connection.username=${db_username}%g" ${dbpersistence}
+    sed -i "s%hibernate.connection.password=${dbpassword_orig}%hibernate.connection.password=${db_password}%g" ${dbpersistence}
+    configure_jetty_appstore_log
+    chown -R jetty:jetty $jetty_home
+    service jetty restart
+}
+
+function configure_jetty_hcbaweb {
+    war_home="${jetty_home}/webapps/hcbaweb"
+    war_file="$repository/web/hcba_web/war/HCBA-WEB.war"
+    if [[ ! -f $war_file ]]; then
+        mkdir -p $jetty_dir
+        war_name=$(basename $war_file)
+        wget -O $jetty_dir/$war_name $war_file
+        war_file=$jetty_dir/$war_name
+    fi
+    dbhost_orig=localhost
+    dbport_orig=3306
+    dbname_orig=hcba
+    dbusername_orig=hcba
+    dbpassword_orig=hcba1234tjibm
+    dbpersistence=${war_home}/WEB-INF/classes/spring/persistence-mysql.properties
+    mkdir -p $war_home
+    unzip -o ${war_file} -d ${war_home}
+    sed -i "s%${dbhost_orig}:${dbport_orig}/${dbname_orig}%${db_host}:${db_port}/${db_name}%g" ${dbpersistence}
+    sed -i "s%jdbc.user=${dbusername_orig}%jdbc.user=${db_username}%g" ${dbpersistence}
+    sed -i "s%jdbc.pass=${dbpassword_orig}%jdbc.pass=${db_password}%g" ${dbpersistence}
+    sed -i "s%hibernate.connection.username=${dbusername_orig}%hibernate.connection.username=${db_username}%g" ${dbpersistence}
+    sed -i "s%hibernate.connection.password=${dbpassword_orig}%hibernate.connection.password=${db_password}%g" ${dbpersistence}
+    configure_jetty_hcbaweb_log
+    chown -R jetty:jetty $jetty_home
+    service jetty restart
+}
+
+function configure_jetty_appstore_log {
+    log_path=/var/log/hcba_cloud
+    log_info_orig="\${web.root}/logs/log.log"
+    log_info_new="$log_path/appstore.log"
+    log_error_orig="\${web.root}/logs/error.log"
+    log_error_new="$log_path/appstore_error.log"
+    log4j_properties=${war_home}/WEB-INF/classes/log4j.properties
+    mkdir -p $log_path
+    chown -R jetty:jetty $log_path
+    sed -i "s#${log_info_orig}#${log_info_new}#g" ${log4j_properties}
+    sed -i "s#${log_error_orig}#${log_error_new}#g" ${log4j_properties}
+}
+
+function configure_jetty_hcbaweb_log {
+    log_path=/var/log/hcba_cloud
+    log_info_orig="logs/log.log"
+    log_info_new="$log_path/hcbaweb.log"
+    log_error_orig="logs/error.log"
+    log_error_new="$log_path/hcbaweb_error.log"
+    log4j_properties=${war_home}/WEB-INF/classes/log4j.properties
+    mkdir -p $log_path
+    chown -R jetty:jetty $log_path
+    sed -i "s#${log_info_orig}#${log_info_new}#g" ${log4j_properties}
+    sed -i "s#${log_error_orig}#${log_error_new}#g" ${log4j_properties}
+}
+
+function clean_jetty {
+    if [ -d $jetty_dir ]; then
+        rm -rf $jetty_dir
+    fi
+}

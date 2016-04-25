@@ -1,0 +1,150 @@
+#
+# This is the HOT Template to install mysql server for hcba appstore in a server
+#
+heat_template_version: 2013-05-23
+
+description: >
+  This is the HOT template to install and configure HCBA Appstore MySQL server.
+  Also need to create the root password, create database name, create user and password.
+
+parameters:
+  key_name:
+    type: string
+    description: Name of an existing key pair to use for the server
+    default: hcba-keypair
+    constraints:
+      - custom_constraint: nova.keypair
+  flavor:
+    type: string
+    description: Flavor for the server to be created
+    default: m1.small
+    constraints:
+      - allowed_values: [m1.tiny, m1.xsmall, m1.small, m1.medium, m1.large, m1.xlarge]
+        description: instance_type
+  image:
+    type: string
+    description: Image ID or image name to use for the server
+    default: rhel6.5
+    constraints:
+      - custom_constraint: glance.image
+  repository:
+    type: string
+    description: the HCBA BASE repository IP address, you MUST fill it with actual IP address, like 192.168.56.111
+  db_name:
+    type: string
+    description: HCBA appstore database name
+    default: hcbaappstore
+    constraints:
+      - length: { min: 1, max: 64 }
+        description: db_name must be between 1 and 64 characters
+      - allowed_pattern: '[a-zA-Z][a-zA-Z0-9]*'
+        description: >
+          db_name must begin with a letter and contain only alphanumeric
+          characters
+  db_user:
+    type: string
+    description: The hcba appstore database account username
+    default: hcbaappstore
+    constraints:
+      - length: { min: 1, max: 16 }
+        description: db_user must be between 1 and 16 characters
+      - allowed_pattern: '[a-zA-Z][a-zA-Z0-9]*'
+        description: >
+          db_user must begin with a letter and contain only alphanumeric
+          characters
+  db_password:
+    type: string
+    description: MySQL database password for root and appstore user
+    default: passw0rd
+    constraints:
+      - length: { min: 6, max: 16 }
+        description: Password length must be between 6 and 16 characters
+      - allowed_pattern: "[a-zA-Z0-9]+"
+        description: Password must consist of characters and numbers only
+      - allowed_pattern: "[a-zA-Z]+[a-zA-Z0-9]*"
+        description: Password must start with a character
+resources:
+  MySQLServer:
+    type: OS::Nova::Server
+    properties:
+      key_name: { get_param: key_name }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash
+            # create the hcba yum repo
+            mkdir -p /etc/yum.repos.d/backup
+            mv /etc/yum.repos.d/*.repo* /etc/yum.repos.d/backup/
+            cat /dev/null > /etc/yum.repos.d/hcba.repo
+            echo "[base]" >> /etc/yum.repos.d/hcba.repo
+            echo "name=hcba-base" >> /etc/yum.repos.d/hcba.repo
+            echo "baseurl=http://repository/hcba_cloud/rhel65/base" >> /etc/yum.repos.d/hcba.repo
+            echo "enabled=1" >> /etc/yum.repos.d/hcba.repo
+            echo "gpgcheck=0" >> /etc/yum.repos.d/hcba.repo
+            echo "" >> /etc/yum.repos.d/hcba.repo
+            echo "[supp]" >> /etc/yum.repos.d/hcba.repo
+            echo "name=hcba-supp" >> /etc/yum.repos.d/hcba.repo
+            echo "baseurl=http://repository/hcba_cloud/rhel65/supp" >> /etc/yum.repos.d/hcba.repo
+            echo "enabled=1" >> /etc/yum.repos.d/hcba.repo
+            echo "gpgcheck=0" >> /etc/yum.repos.d/hcba.repo
+            echo "" >> /etc/yum.repos.d/hcba.repo
+            echo "[extras]" >> /etc/yum.repos.d/hcba.repo
+            echo "name=hcba-extras" >> /etc/yum.repos.d/hcba.repo
+            echo "baseurl=http://repository/hcba_cloud/rhel65/extras" >> /etc/yum.repos.d/hcba.repo
+            echo "enabled=1" >> /etc/yum.repos.d/hcba.repo
+            echo "gpgcheck=0" >> /etc/yum.repos.d/hcba.repo
+            yum clean all
+
+            yum -y install wget
+            export host_name=$(hostname)
+            export sql_schema_url=http://repository/hcba_cloud/web/hcba_appstore/db/appstore-schema.sql
+            export sql_init_url=http://repository/hcba_cloud/web/hcba_appstore/db/appstore-init.sql
+            wget -O /tmp/appstore-schema.sql $sql_schema_url
+            wget -O /tmp/appstore-init.sql $sql_init_url
+
+            yum -y install mysql mysql-server
+            service mysqld start
+            chkconfig mysqld on
+            mysqladmin -u root password db_password
+
+            cat << EOF | mysql -u root --password=db_password
+            INSERT INTO mysql.user(Host,User,Password) values("127.0.0.1","db_user",password("db_password"));
+            INSERT INTO mysql.user(Host,User,Password) values("localhost","db_user",password("db_password"));
+            INSERT INTO mysql.user(Host,User,Password) values("$host_name","db_user",password("db_password"));
+            INSERT INTO mysql.user(Host,User,Password) values("%","db_user",password("db_password"));
+            GRANT ALL PRIVILEGES ON *.* TO "db_user"@"$host_name";
+            GRANT ALL PRIVILEGES ON *.* TO "db_user"@"localhost";
+            GRANT ALL PRIVILEGES ON *.* TO "db_user"@"127.0.0.1";
+            GRANT ALL PRIVILEGES ON *.* TO "db_user"@"%";
+            FLUSH PRIVILEGES;
+            EXIT
+            EOF
+
+            cat << EOF | mysql -u db_user --password=db_password
+            CREATE DATABASE db_name;
+            use db_name;
+            source /tmp/appstore-schema.sql;
+            source /tmp/appstore-init.sql;
+            EXIT
+            EOF
+
+            rm -rf /tmp/appstore-schema.sql
+            rm -rf /tmp/appstore-init.sql
+
+            # to disabled the selinux
+            setenforce 0
+            # to disabled the iptables
+            iptables -F
+            service iptables stop
+            chkconfig iptables off
+          params:
+            repository: { get_param: repository }
+            db_name: { get_param: db_name }
+            db_user: { get_param: db_user }
+            db_password: { get_param: db_password }
+outputs:
+  mysql_server_networks:
+    description: The networks of the deployed hcba appstore mysql server
+    value: { get_attr: [MySQLServer, networks] }

@@ -1,0 +1,52 @@
+#!/bin/bash
+
+# this script is used to set the hcba repo_file
+
+# get the current repository
+if [ -z "$repository" ]; then
+    repository=$(cd $(dirname "$0")/../.. && pwd)
+fi
+
+repo_file="/etc/yum.repos.d/hcba.repo"
+
+function configure_repo {
+    if [ -f ${repo_file} ]; then
+        echo "File ${repo_file} already exists"
+    else
+        cat /dev/null > ${repo_file}
+        echo "[hcba-base]" >> ${repo_file}
+        echo "name=hcba-base" >> ${repo_file}
+        if [[ -f ${repository} ]]; then
+            echo "baseurl=file://${repository}/rhel65/base" >> ${repo_file}
+        else
+            echo "baseurl=${repository}/rhel65/base" >> ${repo_file}
+        fi
+        echo "enabled=1" >> ${repo_file}
+        echo "gpgcheck=0" >> ${repo_file}
+        echo "" >> ${repo_file}
+
+        echo "[hcba-supp]" >> ${repo_file}
+        echo "name=hcba-supp" >> ${repo_file}
+        if [[ -f ${repository} ]]; then
+            echo "baseurl=file://${repository}/rhel65/supp" >> ${repo_file}
+        else
+            echo "baseurl=${repository}/rhel65/supp" >> ${repo_file}
+        fi
+        echo "enabled=1" >> ${repo_file}
+        echo "gpgcheck=0" >> ${repo_file}
+        echo "" >> ${repo_file}
+
+        echo "[hcba-extras]" >> ${repo_file}
+        echo "name=hcba-extras" >> ${repo_file}
+        if [[ -f ${repository} ]]; then
+            echo "baseurl=file://${repository}/rhel65/extras" >> ${repo_file}
+        else
+            echo "baseurl=${repository}/rhel65/extras" >> ${repo_file}
+        fi
+        echo "enabled=1" >> ${repo_file}
+        echo "gpgcheck=0" >> ${repo_file}
+        echo "" >> ${repo_file}
+        
+        yum clean all
+    fi
+}

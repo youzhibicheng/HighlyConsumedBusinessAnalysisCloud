@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# this script is used to configure java
+
+function configure_openjdk_java {
+    yum -y install java-1.7.0 java-1.7.0-devel
+}
+
+function configure_ibm_java {
+    yum -y install java-1.7.0 java-1.7.0-devel
+}
+
+function configure_oracle_java {
+    yum -y install java-1.7.0 java-1.7.0-devel
+}

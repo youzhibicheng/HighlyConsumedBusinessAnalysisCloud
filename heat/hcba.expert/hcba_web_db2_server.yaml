@@ -1,0 +1,166 @@
+#
+# This is the HOT Template to install mysql for hcba web application in a server
+#
+heat_template_version: 2013-05-23
+
+description: >
+  This is the HOT template to install and configure MySQL server.
+  Also need to create the root password, create database name, create user and password.
+
+parameters:
+  key_name:
+    type: string
+    description: Name of an existing key pair to use for the server
+    default: hcba-keypair
+    constraints:
+      - custom_constraint: nova.keypair
+  flavor:
+    type: string
+    description: Flavor for the server to be created
+    default: m1.small
+    constraints:
+      - allowed_values: [m1.tiny, m1.xsmall, m1.small, m1.medium, m1.large, m1.xlarge]
+        description: instance_type
+  image:
+    type: string
+    description: Image ID or image name to use for the server
+    default: rhel6.5
+    constraints:
+      - custom_constraint: glance.image
+  repository:
+    type: string
+    description: the HCBA BASE repository IP address, you MUST fill it with actual IP address, like 192.168.56.111
+  db_password:
+    type: string
+    description: DB2 database password
+    default: passw0rd
+    constraints:
+      - length: { min: 6, max: 16 }
+        description: Password length must be between 6 and 16 characters
+      - allowed_pattern: "[a-zA-Z0-9]+"
+        description: Password must consist of characters and numbers only
+      - allowed_pattern: "[a-zA-Z]+[a-zA-Z0-9]*"
+        description: Password must start with a character
+  db_name:
+    type: string
+    description: HCBA Web database name
+    default: hcbaweb
+    constraints:
+      - length: { min: 1, max: 64 }
+        description: db_name must be between 1 and 64 characters
+      - allowed_pattern: '[a-zA-Z][a-zA-Z0-9]*'
+        description: >
+          db_name must begin with a letter and contain only alphanumeric
+          characters
+  db_username:
+    type: string
+    description: The hcba web database account username
+    default: hcbaweb
+    constraints:
+      - length: { min: 1, max: 16 }
+        description: db_username must be between 1 and 16 characters
+      - allowed_pattern: '[a-zA-Z][a-zA-Z0-9]*'
+        description: >
+          db_username must begin with a letter and contain only alphanumeric
+          characters
+  db_password:
+    type: string
+    description: The hcba web database hcbaweb account password
+    default: passw0rd
+    constraints:
+      - length: { min: 1, max: 41 }
+        description: db_password must be between 1 and 41 characters
+      - allowed_pattern: '[a-zA-Z0-9]*'
+        description: db_password must contain only alphanumeric characters
+  r_ip:
+    type: string
+    description: the R server IP address, like 192.168.56.111
+  ftp_user:
+    type: string
+    description: the ftp user
+    default: hcba_ftp
+  ftp_password:
+    type: string
+    description: the ftp user password
+    default: passw0rd
+  ftp_path:
+    type: string
+    description: the ftp user password
+    default: /home/hcba01
+resources:
+  MySQLServer:
+    type: OS::Nova::Server
+    properties:
+      key_name: { get_param: key_name }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash
+            # create the hcba yum repo
+            mkdir -p /etc/yum.repos.d/backup
+            mv /etc/yum.repos.d/*.repo* /etc/yum.repos.d/backup/
+            cat /dev/null > /etc/yum.repos.d/hcba.repo
+            echo "[base]" >> /etc/yum.repos.d/hcba.repo
+            echo "name=hcba-base" >> /etc/yum.repos.d/hcba.repo
+            echo "baseurl=http://repository/hcba_cloud/rhel65/base" >> /etc/yum.repos.d/hcba.repo
+            echo "enabled=1" >> /etc/yum.repos.d/hcba.repo
+            echo "gpgcheck=0" >> /etc/yum.repos.d/hcba.repo
+            echo "" >> /etc/yum.repos.d/hcba.repo
+            echo "[supp]" >> /etc/yum.repos.d/hcba.repo
+            echo "name=hcba-supp" >> /etc/yum.repos.d/hcba.repo
+            echo "baseurl=http://repository/hcba_cloud/rhel65/supp" >> /etc/yum.repos.d/hcba.repo
+            echo "enabled=1" >> /etc/yum.repos.d/hcba.repo
+            echo "gpgcheck=0" >> /etc/yum.repos.d/hcba.repo
+            echo "" >> /etc/yum.repos.d/hcba.repo
+            echo "[extras]" >> /etc/yum.repos.d/hcba.repo
+            echo "name=hcba-extras" >> /etc/yum.repos.d/hcba.repo
+            echo "baseurl=http://repository/hcba_cloud/rhel65/extras" >> /etc/yum.repos.d/hcba.repo
+            echo "enabled=1" >> /etc/yum.repos.d/hcba.repo
+            echo "gpgcheck=0" >> /etc/yum.repos.d/hcba.repo
+            yum clean all
+
+            yum -y install wget
+            export sql_schema_url=http://repository/hcba_cloud/web/hcba_web/db/web-schema.sql
+            export sql_init_url=http://repository/hcba_cloud/web/hcba_web/db/web-init.sql
+            wget -O /tmp/schema.sql $sql_schema_url
+            wget -O /tmp/init.sql $sql_init_url
+            
+            yum -y install mysql mysql-server
+            service mysqld start
+            chkconfig mysqld on
+            mysqladmin -u root password db_root_password
+            cat << EOF | mysql -u root --password=db_root_password
+            CREATE DATABASE db_name;
+            GRANT ALL PRIVILEGES ON db_name.* TO "db_username"@"%" IDENTIFIED BY "db_password";
+            FLUSH PRIVILEGES;
+            use db_name;
+            source /tmp/schema.sql;
+            source /tmp/init.sql;
+            UPDATE t_model_engine SET ip="r_ip", ftpUserName="ftp_user", ftpPassword="ftp_password", ftpPath="ftp_path" WHERE id='-1';
+            EXIT
+            EOF
+            rm -rf /tmp/schema.sql
+            rm -rf /tmp/init.sql
+            
+            # to disabled the selinux
+            setenforce 0
+            # to disabled the iptables
+            iptables -F
+            service iptables stop
+            chkconfig iptables off
+          params:
+            repository: { get_param: repository }
+            db_root_password: { get_param: db_root_password }
+            db_name: { get_param: db_name }
+            db_username: { get_param: db_username }
+            db_password: { get_param: db_password }
+            r_ip: { get_param: r_ip }
+            ftp_user: { get_param: ftp_user }
+            ftp_password: { get_param: ftp_password }
+            ftp_path: { get_param: ftp_path }
+outputs:
+  mysql_server_networks:
+    description: The networks of the deployed server
+    value: { get_attr: [MySQLServer, networks] }

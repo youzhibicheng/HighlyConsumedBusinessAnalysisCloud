@@ -1,0 +1,336 @@
+#!/bin/bash
+
+# this script is used to configure R and R-Slave
+
+# get the current repository
+if [ -z "$repository" ]; then
+    repository=$(cd $(dirname "$0")/../.. && pwd)
+fi
+
+# if repository is website, will download it to this temporary directory
+package_dir=/tmp/hcba/R
+
+function init_r {
+    if [ ! -d $package_dir ]; then
+        mkdir -p $package_dir
+    fi
+}
+
+function clean_r {
+    if [ -d $package_dir ]; then
+        rm -rf $package_dir
+    fi
+}
+
+function r_cmd_install {
+    package_file=$1
+    if [ -f $package_file ]; then
+        R CMD INSTALL $package_file
+    else
+        package_name=$(basename $package_file)
+        wget -O $package_dir/$package_name $package_file
+        R CMD INSTALL $package_dir/$package_name
+        if [[ $? -ne 0 ]]; then
+            echo "ERROR installing $package_dir/$package_name"
+            exit 1
+        fi
+        #rm -rf $package_dir/$package_name
+    fi
+}
+
+function r_cmd_install_stringi {
+    stringi_file=""
+    if [ -d $repository ]; then
+        stringi_file=$repository/dm/R/stringi-master
+    else
+        stringi_url=$repository/dm/R/stringi-master.zip
+        wget -O $package_dir/stringi-master.zip $stringi_url
+        unzip $package_dir/stringi-master.zip -d $package_dir
+        stringi_file=$package_dir/stringi-master
+    fi
+    chmod a+x $stringi_file/configure
+    r_cmd_install $stringi_file
+    if [[ $? -ne 0 ]]; then
+        echo "ERROR installing $package_dir/$package_name"
+        exit 1
+    fi
+}
+
+
+function configure_r_packages {
+    # install prerequisites
+    yum -y install gcc-gfortran gcc gcc-c++ readline-devel libXt-devel autoconf automake
+    yum -y install fonts-chinese tcl tcl-devel tclx tk tk-devel
+    yum -y install mesa-libGLU mesa-libGLU-devel libxml2 libxml2-devel readline readline-devel
+    yum -y install atlas atlas-devel blas blas-devel lapack lapack-devel
+    yum -y install wget
+    
+    rserver_file="$repository/dm/R/Rserve_1.7-3.tar.gz"
+    r_cmd_install $rserver_file
+    
+    rcpp_file="$repository/dm/R/Rcpp_0.11.6.tar.gz"
+    r_cmd_install $rcpp_file
+
+    #ranger_file="$repository/dm/R/ranger_0.3.0.tar.gz"
+    #r_cmd_install $ranger_file
+    #boruta_file="$repository/dm/R/Boruta_5.0.0.tar.gz"
+    #r_cmd_install $boruta_file
+    
+    randomForest_file="$repository/dm/R/randomForest_4.6-12.tar.gz"
+    r_cmd_install $randomForest_file
+    rFerns_file="$repository/dm/R/rFerns_2.0.0.tar.gz"
+    r_cmd_install $rFerns_file
+    boruta_file="$repository/dm/R/Boruta_4.0.0.tar.gz"
+    r_cmd_install $boruta_file
+
+    partykit_file="$repository/dm/R/partykit_1.0-1.tar.gz"
+    r_cmd_install $partykit_file
+    
+    c50_file="$repository/dm/R/C50_0.1.0-24.tar.gz"
+    r_cmd_install $c50_file
+
+    e1071_file="$repository/dm/R/e1071_1.6-7.tar.gz"
+    r_cmd_install $e1071_file
+
+    mice_file="$repository/dm/R/mice_2.25.tar.gz"
+    r_cmd_install $mice_file
+    
+    # do not need now
+    # ERROR: dependencies ‘TAM’, ‘lme4’, ‘inline’, ‘car’, ‘sjmisc’, ‘multiwayvcov’, ‘grouped’, ‘MBESS’, ‘bayesm’, ‘sirt’, ‘pls’, ‘mitools’, ‘mvtnorm’, ‘RcppArmadillo’ are not available for package ‘miceadds’
+    #miceadds_file="$repository/dm/R/miceadds_1.3-0.tar.gz"
+    #r_cmd_install $miceadds_file
+
+    nnet_file="$repository/dm/R/nnet_7.3-11.tar.gz"
+    r_cmd_install $nnet_file
+
+    modeltools_file="$repository/dm/R/modeltools_0.2-21.tar.gz"
+    r_cmd_install $modeltools_file
+    
+    deoptimr_file="$repository/dm/R/DEoptimR_1.0-4.tar.gz"
+    r_cmd_install $deoptimr_file
+    
+    mclust_file="$repository/dm/R/mclust_5.1.tar.gz"
+    r_cmd_install $mclust_file
+    
+    flexmix_file="$repository/dm/R/flexmix_2.3-13.tar.gz"
+    r_cmd_install $flexmix_file
+    
+    prabclus_file="$repository/dm/R/prabclus_2.2-6.tar.gz"
+    r_cmd_install $prabclus_file
+    
+    diptest_file="$repository/dm/R/diptest_0.75-7.tar.gz"
+    r_cmd_install $diptest_file
+    
+    mvtnorm_file="$repository/dm/R/mvtnorm_1.0-4.tar.gz"
+    r_cmd_install $mvtnorm_file
+    
+    robustbase_file="$repository/dm/R/robustbase_0.92-5.tar.gz"
+    r_cmd_install $robustbase_file
+    
+    kernlab_file="$repository/dm/R/kernlab_0.9-23.tar.gz"
+    r_cmd_install $kernlab_file
+    
+    trimcluster_file="$repository/dm/R/trimcluster_0.1-2.tar.gz"
+    r_cmd_install $trimcluster_file
+
+    fpc_file="$repository/dm/R/fpc_2.1-10.tar.gz"
+    r_cmd_install $fpc_file
+    
+    cluster_file="$repository/dm/R/cluster_2.0.3.tar.gz"
+    r_cmd_install $cluster_file
+    
+    kohonen_file="$repository/dm/R/kohonen_2.0.19.tar.gz"
+    r_cmd_install $kohonen_file
+
+    bitops_file="$repository/dm/R/bitops_1.0-6.tar.gz"
+    r_cmd_install $bitops_file
+    
+    gtools_file="$repository/dm/R/gtools_3.5.0.tar.gz"
+    r_cmd_install $gtools_file
+    
+    gdata_file="$repository/dm/R/gdata_2.17.0.tar.gz"
+    r_cmd_install $gdata_file
+    
+    catools_file="$repository/dm/R/caTools_1.17.1.tar.gz"
+    r_cmd_install $catools_file
+    
+    zoo_file="$repository/dm/R/zoo_1.7-12.tar.gz"
+    r_cmd_install $zoo_file
+    
+    xts_file="$repository/dm/R/xts_0.9-7.tar.gz"
+    r_cmd_install $xts_file
+    
+    ttr_file="$repository/dm/R/TTR_0.23-0.tar.gz"
+    r_cmd_install $ttr_file
+    
+    gplots_file="$repository/dm/R/gplots_2.17.0.tar.gz"
+    r_cmd_install $gplots_file
+
+    quantmod_file="$repository/dm/R/quantmod_0.4-5.tar.gz"
+    r_cmd_install $quantmod_file
+
+    abind_file="$repository/dm/R/abind_1.4-3.tar.gz"
+    r_cmd_install $abind_file
+    
+    rocr_file="$repository/dm/R/ROCR_1.0-7.tar.gz"
+    r_cmd_install $rocr_file
+    
+    dmwr_file="$repository/dm/R/DMwR_0.4.1.tar.gz"
+    r_cmd_install $dmwr_file
+    
+    ltsa_file="$repository/dm/R/ltsa_1.4.5.tar.gz"
+    r_cmd_install $ltsa_file
+    
+    arfima_file="$repository/dm/R/arfima_1.3-4.tar.gz"
+    r_cmd_install $arfima_file
+    
+    arules_file="$repository/dm/R/arules_1.3-1.tar.gz"
+    r_cmd_install $arules_file
+
+    dichromat_file="$repository/dm/R/dichromat_2.0-0.tar.gz"
+    r_cmd_install $dichromat_file
+
+    colorspace_file="$repository/dm/R/colorspace_1.2-6.tar.gz"
+    r_cmd_install $colorspace_file
+    
+    munsell_file="$repository/dm/R/munsell_0.4.2.tar.gz"
+    r_cmd_install $munsell_file
+    
+    labeling_file="$repository/dm/R/labeling_0.3.tar.gz"
+    r_cmd_install $labeling_file
+    
+    iterators_file="$repository/dm/R/iterators_1.0.8.tar.gz"
+    r_cmd_install $iterators_file
+    
+    xtable_file="$repository/dm/R/xtable_1.8-0.tar.gz"
+    r_cmd_install $xtable_file
+    
+    #stringi_file="$repository/dm/R/stringi_1.0-1.tar.gz"
+    #r_cmd_install $stringi_file --configure-args='--disable-pkg-config'
+    r_cmd_install_stringi
+
+    magrittr_file="$repository/dm/R/magrittr_1.5.tar.gz"
+    r_cmd_install $magrittr_file
+    
+    stringr_file="$repository/dm/R/stringr_1.0.0.tar.gz"
+    r_cmd_install $stringr_file
+    
+    gtable_file="$repository/dm/R/gtable_0.1.2.tar.gz"
+    r_cmd_install $gtable_file
+    
+    plyr_file="$repository/dm/R/plyr_1.8.3.tar.gz"
+    r_cmd_install $plyr_file
+
+    rcolor_file="$repository/dm/R/RColorBrewer_1.1-2.tar.gz"
+    r_cmd_install $rcolor_file
+    
+    scales_file="$repository/dm/R/scales_0.3.0.tar.gz"
+    r_cmd_install $scales_file
+    
+    foreach_file="$repository/dm/R/foreach_1.4.3.tar.gz"
+    r_cmd_install $foreach_file
+
+    registry_file="$repository/dm/R/registry_0.3.tar.gz"
+    r_cmd_install $registry_file
+    
+    digest_file="$repository/dm/R/digest_0.6.9.tar.gz"
+    r_cmd_install $digest_file
+    
+    pkgmaker_file="$repository/dm/R/pkgmaker_0.22.tar.gz"
+    r_cmd_install $pkgmaker_file
+    
+    rngtools_file="$repository/dm/R/rngtools_1.2.4.tar.gz"
+    r_cmd_install $rngtools_file
+    
+    gridBase_file="$repository/dm/R/gridBase_0.4-7.tar.gz"
+    r_cmd_install $gridBase_file
+    
+    doParallel_file="$repository/dm/R/doParallel_1.0.10.tar.gz"
+    r_cmd_install $doParallel_file
+    
+    reshape2_file="$repository/dm/R/reshape2_1.4.1.tar.gz"
+    r_cmd_install $reshape2_file
+    
+    ggplot2_file="$repository/dm/R/ggplot2_2.0.0.tar.gz"
+    r_cmd_install $ggplot2_file
+
+    lmtest_file="$repository/dm/R/lmtest_0.9-34.tar.gz"
+    r_cmd_install $lmtest_file
+    
+    TSP_file="$repository/dm/R/TSP_1.1-3.tar.gz"
+    r_cmd_install $TSP_file
+    
+    qap_file="$repository/dm/R/qap_0.1-0.tar.gz"
+    r_cmd_install $qap_file
+    
+    gclus_file="$repository/dm/R/gclus_1.3.1.tar.gz"
+    r_cmd_install $gclus_file
+
+    nmf_file="$repository/dm/R/NMF_0.20.6.tar.gz"
+    r_cmd_install $nmf_file
+    
+    irlba_file="$repository/dm/R/irlba_2.0.0.tar.gz"
+    r_cmd_install $irlba_file
+    
+    scatterplot3d_file="$repository/dm/R/scatterplot3d_0.3-36.tar.gz"
+    r_cmd_install $scatterplot3d_file
+    
+    vcd_file="$repository/dm/R/vcd_1.4-1.tar.gz"
+    r_cmd_install $vcd_file
+    
+    seriation_file="$repository/dm/R/seriation_1.1-3.tar.gz"
+    r_cmd_install $seriation_file
+    
+    igraph_file="$repository/dm/R/igraph_1.0.1.tar.gz"
+    r_cmd_install $igraph_file
+
+    arulesViz_file="$repository/dm/R/arulesViz_1.1-0.tar.gz"
+    r_cmd_install $arulesViz_file
+    
+    xml_file="$repository/dm/R/XML_3.98-1.3.tar.gz"
+    r_cmd_install $xml_file
+    
+    pmml_file="$repository/dm/R/pmml_1.5.0.tar.gz"
+    r_cmd_install $pmml_file
+    
+    #rscript_file="$repository/dm/R/Rscript.R"
+    #R CMD BATCH $rscript_file
+}
+
+function configure_r {
+    init_r
+    yum -y install R
+    configure_r_packages
+    # Start Rserve as modeling engine
+    R CMD Rserve --RS-enable-remote
+    clean_r
+}
+
+function configure_r_slave {
+    init_r
+    yum -y install R
+    configure_r_packages
+    R CMD Rserve --RS-enable-remote
+    clean_r
+}
+
+function configure_r_compile {
+    yum -y install gcc-gfortran gcc gcc-c++ readline-devel libXt-devel autoconf automake
+    yum -y install fonts-chinese tcl tcl-devel tclx tk tk-devel
+    yum -y install mesa-libGLU mesa-libGLU-devel
+
+    r_file="$repository/dm/R/R-3.1.3.tar.gz"
+    r_home=/opt/R
+    mkdir -p $r_home
+    cd $r_home
+    tar -zxvf $r_file -C $r_home  --strip-component 1
+    
+    ./configure  --with-x=no --with-readline=no --enable-R-shlib
+    make
+    make install
+    configure_r_packages
+    # Start Rserve as modeling engine
+    R CMD Rserve --RS-enable-remote
+}
+
+

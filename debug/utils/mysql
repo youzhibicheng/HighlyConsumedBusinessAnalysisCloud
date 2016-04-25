@@ -1,0 +1,115 @@
+#!/bin/bash
+
+# this script is used to configure mysql
+
+# get the current repository
+if [ -z "$repository" ]; then
+    repository=$(cd $(dirname "$0")/../.. && pwd)
+fi
+
+sql_dir=/tmp/hcba/mysql
+
+function init_mysql {
+    if [[ ! -d $sql_dir ]]; then
+        mkdir -p $sql_dir
+    fi
+}
+
+function clean_mysql {
+    if [[ -d $sql_dir ]]; then
+        rm -rf $sql_dir
+    fi
+}
+
+function get_sql_file {
+    sql_file=$1
+    if [ -f $sql_file ]; then
+        echo "$sql_file"
+    else
+        sql_name=$(basename $sql_file)
+        wget -O $sql_dir/$sql_name $sql_file
+        echo "$sql_dir/$sql_name"
+    fi
+}
+
+function configure_mysql {
+    db_root_password=$1
+    db_name=$2
+    db_username=$3
+    db_password=$4
+    schema_sql=$5
+    init_sql=$6
+
+    yum -y install mysql mysql-server
+    service mysqld start
+    chkconfig mysqld on
+    
+    mysqladmin -u root password $db_root_password
+    cat << EOF | mysql -u root --password=$db_root_password
+    CREATE DATABASE IF NOT EXISTS $db_name;
+    GRANT ALL PRIVILEGES ON $db_name.* TO "$db_username"@"localhost" IDENTIFIED BY "$db_password" WITH GRANT OPTION;
+    GRANT ALL PRIVILEGES ON $db_name.* TO "$db_username"@"%" IDENTIFIED BY "$db_password" WITH GRANT OPTION;
+    FLUSH PRIVILEGES;
+    use $db_name;
+    source ${schema_sql};
+    source ${init_sql};
+    EXIT
+EOF
+}
+
+function configure_mysql_hcbaweb {
+    init_mysql
+    db_root_password=$1
+    db_name=$2
+    db_username=$3
+    db_password=$4
+    r_ip=$5
+    ftp_user=$6
+    ftp_password=$7
+    ftp_path=$8
+    schema_sql=$(get_sql_file $repository/web/hcba_web/db/web-schema.sql)
+    init_sql=$(get_sql_file $repository/web/hcba_web/db/web-init.sql)
+    configure_mysql $1 $2 $3 $4 $schema_sql $init_sql
+    update_mysql_r $db_name $db_username $db_password $r_ip $ftp_user $ftp_password $ftp_path
+    clean_mysql
+}
+
+function configure_mysql_appstore {
+    init_mysql
+    schema_sql=$(get_sql_file $repository/web/hcba_appstore/db/appstore-schema.sql)
+    init_sql=$(get_sql_file $repository/web/hcba_appstore/db/appstore-init.sql)
+    configure_mysql $* $schema_sql $init_sql
+    clean_mysql
+}
+
+function update_mysql_r {
+    db_name=$1
+    db_username=$2
+    db_password=$3
+    r_ip=$4
+    ftp_user=$5
+    ftp_password=$6
+    ftp_path=$7
+    cat << EOF | mysql -u $db_username --password=$db_password
+    use $db_name;
+    UPDATE t_model_engine SET ip="${r_ip}", ftpUserName="$ftp_user", ftpPassword="$ftp_password", ftpPath="$ftp_path" WHERE id='-1';
+    EXIT
+EOF
+}
+
+function update_mysql_r_slave {
+    yum -y install mysql
+    db_host=$1
+    db_name=$2
+    db_username=$3
+    db_password=$4
+    ftp_user=$5
+    ftp_password=$6
+    ftp_path=$7
+    r_ip=$(ifconfig  | grep 'inet addr:'| grep -v '127.0.0.1' | cut -d: -f2 | awk '{ print $1}')
+    cat << EOF | mysql -h $db_host -u $db_username --password=$db_password
+    use $db_name;
+    INSERT INTO t_model_engine (description, enginePassword, enginePort, engineTypeId, engineUserName, ftpPassword, ftpPath, ftpPort, ftpUserName, ip, name, stateId, usageTypeId, workloadConsume, workloadTrain, workloadValidate, workspaceLocation) VALUES("this is a local engine", "", 6311, 11, "", "$ftp_password", "$ftp_path", 21, "$ftp_user", "$r_ip", "local engine", 11, 31, 0, 0, 0, "0");
+    EXIT
+EOF
+}

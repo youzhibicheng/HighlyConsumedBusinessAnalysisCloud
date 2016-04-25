@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# this script is used to configure ftp
+
+# get the current repository
+if [ -z "$repository" ]; then
+    repository=$(cd $(dirname "$0")/../.. && pwd)
+fi
+
+# install vsftpd
+function configure_ftp {
+    yum -y install vsftpd
+    chkconfig vsftpd on
+    service vsftpd start
+    userdel -r $ftp_user
+    useradd  --home-dir $ftp_path --create-home --base-dir $ftp_path $ftp_user
+    echo $ftp_password | passwd --stdin $ftp_user
+    #chown -R $ftp_user:$ftp_user $ftp_path
+    chown -R 777 $ftp_path
+}

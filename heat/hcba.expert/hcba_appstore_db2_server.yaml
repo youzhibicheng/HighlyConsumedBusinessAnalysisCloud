@@ -1,0 +1,179 @@
+#
+# This is the HOT Template to install mysql server for hcba appstore in a server
+#
+heat_template_version: 2013-05-23
+
+description: >
+  This is the HOT template to install and configure HCBA Appstore MySQL server.
+  Also need to create the root password, create database name, create user and password.
+
+parameters:
+  key_name:
+    type: string
+    description: Name of an existing key pair to use for the server
+    default: hcba-keypair
+    constraints:
+      - custom_constraint: nova.keypair
+  flavor:
+    type: string
+    description: Flavor for the server to be created
+    default: m1.small
+    constraints:
+      - allowed_values: [m1.tiny, m1.xsmall, m1.small, m1.medium, m1.large, m1.xlarge]
+        description: instance_type
+  image:
+    type: string
+    description: Image ID or image name to use for the server
+    default: rhel6.5
+    constraints:
+      - custom_constraint: glance.image
+  repository:
+    type: string
+    description: the HCBA BASE repository IP address, you MUST fill it with actual IP address, like 192.168.56.111
+  db_name:
+    type: string
+    description: HCBA appstore database name
+    default: appstore
+    constraints:
+      - length: { min: 1, max: 64 }
+        description: db_name must be between 1 and 64 characters
+      - allowed_pattern: '[a-zA-Z][a-zA-Z0-9]*'
+        description: >
+          db_name must begin with a letter and contain only alphanumeric
+          characters
+  db_password:
+    type: string
+    description: DB2 database password
+    default: passw0rd
+    constraints:
+      - length: { min: 6, max: 16 }
+        description: Password length must be between 6 and 16 characters
+      - allowed_pattern: "[a-zA-Z0-9]+"
+        description: Password must consist of characters and numbers only
+      - allowed_pattern: "[a-zA-Z]+[a-zA-Z0-9]*"
+        description: Password must start with a character
+resources:
+  DB2Server:
+    type: OS::Nova::Server
+    properties:
+      key_name: { get_param: key_name }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash
+            # create the hcba yum repo
+            mkdir -p /etc/yum.repos.d/backup
+            mv /etc/yum.repos.d/*.repo* /etc/yum.repos.d/backup/
+            cat /dev/null > /etc/yum.repos.d/hcba.repo
+            echo "[base]" >> /etc/yum.repos.d/hcba.repo
+            echo "name=hcba-base" >> /etc/yum.repos.d/hcba.repo
+            echo "baseurl=http://repository/hcba_cloud/rhel65/base" >> /etc/yum.repos.d/hcba.repo
+            echo "enabled=1" >> /etc/yum.repos.d/hcba.repo
+            echo "gpgcheck=0" >> /etc/yum.repos.d/hcba.repo
+            echo "" >> /etc/yum.repos.d/hcba.repo
+            echo "[supp]" >> /etc/yum.repos.d/hcba.repo
+            echo "name=hcba-supp" >> /etc/yum.repos.d/hcba.repo
+            echo "baseurl=http://repository/hcba_cloud/rhel65/supp" >> /etc/yum.repos.d/hcba.repo
+            echo "enabled=1" >> /etc/yum.repos.d/hcba.repo
+            echo "gpgcheck=0" >> /etc/yum.repos.d/hcba.repo
+            echo "" >> /etc/yum.repos.d/hcba.repo
+            echo "[extras]" >> /etc/yum.repos.d/hcba.repo
+            echo "name=hcba-extras" >> /etc/yum.repos.d/hcba.repo
+            echo "baseurl=http://repository/hcba_cloud/rhel65/extras" >> /etc/yum.repos.d/hcba.repo
+            echo "enabled=1" >> /etc/yum.repos.d/hcba.repo
+            echo "gpgcheck=0" >> /etc/yum.repos.d/hcba.repo
+            yum clean all
+
+            export DB2_PACKAGE_NAME=DB2_Svr_10.5.0.3_Linux.tar.gz
+            export DB2_SCRIPT_SCHEMA=appstore-schema-db2.sql
+            export DB2_SCRIPT_INIT=appstore-init-db2.sql
+            export DB2_INSTALL_PATH=/opt/ibm/db2/V10.5
+            export DB2_INSTANCE_USER=db2inst1
+            export DB2_INSTANCE_GROUP=db2iadm1
+            export DB2_PROTECT_USER=db2fenc1
+            export DB2_PROTECT_GROUP=db2fadm1
+            export DB2_ADMIN_USER=dasusr1
+            export DB2_ADMIN_GROUP=dasadm1
+            export DB2_SVCENAME=60006
+            export DB2_INSTANCE_PATH=${DB2_INSTALL_PATH}/instance
+            export DB2_INSTANCE_NAME=db2inst1
+
+
+            yum -y install wget
+            export db2_package_url="http://repository/hcba_cloud/db/db2/${DB2_PACKAGE_NAME}"
+            export sql_schema_url="http://repository/hcba_cloud/web/hcba_appstore/db/${DB2_SCRIPT_SCHEMA}"
+            export sql_init_url="http://repository/hcba_cloud/web/hcba_appstore/db/${DB2_SCRIPT_INIT}"
+            wget -O /tmp/${DB2_PACKAGE_NAME} ${db2_package_url}
+            wget -O /tmp/${DB2_SCRIPT_SCHEMA} ${sql_schema_url}
+            wget -O /tmp/${DB2_SCRIPT_INIT} ${sql_init_url}
+            # install prerequisites
+            yum -y install libaio libibcm librdmacm ibsim ibutils libcxgb3 libipathverbs libmthca libnes rdma dapl sg3_utils compat-libstdc++-33
+            service rdma start
+            chkconfig rdma on
+
+            tar zxvf /tmp/${DB2_PACKAGE_NAME} -C /tmp
+            cat << EOF | /tmp/server/db2_install -f sysreq
+            yes
+            SERVER
+            no
+            EOF
+
+            groupadd -g 999 ${DB2_INSTANCE_GROUP}
+            groupadd -g 998 ${DB2_PROTECT_GROUP}
+            groupadd -g 997 ${DB2_ADMIN_GROUP}
+            useradd -u 1004 -g ${DB2_INSTANCE_GROUP} -m -d /home/${DB2_INSTANCE_USER} ${DB2_INSTANCE_USER}
+            useradd -u 1003 -g ${DB2_PROTECT_GROUP} -m -d /home/${DB2_PROTECT_USER} ${DB2_PROTECT_USER} 
+            useradd -u 1002 -g ${DB2_ADMIN_GROUP} -m -d /home/${DB2_ADMIN_USER} ${DB2_ADMIN_USER}
+
+            cat << EOF | passwd ${DB2_INSTANCE_USER}
+            db_password
+            db_password
+            EOF
+            cat << EOF | passwd ${DB2_PROTECT_USER} 
+            db_password
+            db_password
+            EOF
+            cat << EOF | passwd ${DB2_ADMIN_USER}
+            db_password
+            db_password
+            EOF
+
+            # need to set the hostname correctly
+            HOST_IP=$(ifconfig eth0 | grep "inet addr:" | awk '{print $2}' | cut -c 6- )
+            HOST_NAME=$(hostname)
+            echo "$HOST_IP $HOST_NAME" >> /etc/hosts
+
+            # create db2 instance
+            ${DB2_INSTANCE_PATH}/db2icrt -u ${DB2_PROTECT_USER} ${DB2_INSTANCE_NAME}
+            ${DB2_INSTANCE_PATH}/db2iauto -on ${DB2_INSTANCE_NAME}
+
+
+            cat << EOF | su - ${DB2_INSTANCE_USER}
+            db2start
+            db2set DB2COMM=TCPIP
+            db2 update dbm cfg using SVCENAME ${DB2_SVCENAME}
+            db2stop
+            db2start
+
+            db2 create db db_name using codeset UTF-8 territory CN COLLATE USING SYSTEM
+            db2 connect to db_name user ${DB2_INSTANCE_USER} using db_password
+
+            db2 -tvf /tmp/${DB2_SCRIPT_SCHEMA}
+            db2 -tvf /tmp/${DB2_SCRIPT_INIT}
+            EOF
+
+            rm -rf /tmp/server
+            rm -rf /tmp/${DB2_PACKAGE_NAME}
+            rm -rf /tmp/${DB2_SCRIPT_SCHEMA}
+            rm -rf /tmp/${DB2_SCRIPT_INIT}
+          params:
+            repository: { get_param: repository }
+            db_password: { get_param: db_password }
+            db_name: { get_param: db_name }
+            db_password: { get_param: db_password }
+outputs:
+  mysql_server_networks:
+    description: The networks of the deployed hcba appstore mysql server
+    value: { get_attr: [DB2Server, networks] }

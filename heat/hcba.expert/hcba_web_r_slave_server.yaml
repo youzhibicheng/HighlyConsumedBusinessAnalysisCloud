@@ -1,0 +1,200 @@
+#
+# This is the HOT Template to install R for hcba web application in a server
+#
+heat_template_version: 2013-05-23
+
+description: >
+  This is the HOT template to install and configure R server.
+
+parameters:
+  key_name:
+    type: string
+    description: Name of an existing key pair to use for the server
+    default: hcba-keypair
+    constraints:
+      - custom_constraint: nova.keypair
+  flavor:
+    type: string
+    description: Flavor for the server to be created
+    default: m1.small
+    constraints:
+      - allowed_values: [m1.tiny, m1.xsmall, m1.small, m1.medium, m1.large, m1.xlarge]
+        description: instance_type
+  image:
+    type: string
+    description: Image ID or image name to use for the server
+    default: rhel6.5
+    constraints:
+      - custom_constraint: glance.image
+  repository:
+    type: string
+    description: the HCBA BASE repository IP address, you MUST fill it with actual IP address, like 192.168.56.111
+  db_host:
+    type: string
+    description: the HCBA database server IP address, like 192.168.56.111
+  db_name:
+    type: string
+    description: HCBA Web database name
+    default: hcbaweb
+    constraints:
+      - length: { min: 1, max: 64 }
+        description: db_name must be between 1 and 64 characters
+      - allowed_pattern: '[a-zA-Z][a-zA-Z0-9]*'
+        description: >
+          db_name must begin with a letter and contain only alphanumeric
+          characters
+  db_user:
+    type: string
+    description: The hcba web database account username
+    default: hcbaweb
+    constraints:
+      - length: { min: 1, max: 16 }
+        description: db_user must be between 1 and 16 characters
+      - allowed_pattern: '[a-zA-Z][a-zA-Z0-9]*'
+        description: >
+          db_user must begin with a letter and contain only alphanumeric
+          characters
+  db_password:
+    type: string
+    description: The hcba web database hcbaweb account password
+    default: passw0rd
+    constraints:
+      - length: { min: 1, max: 41 }
+        description: db_password must be between 1 and 41 characters
+      - allowed_pattern: '[a-zA-Z0-9]*'
+        description: db_password must contain only alphanumeric characters
+  ftp_user:
+    type: string
+    description: the ftp user
+    default: hcba_ftp
+  ftp_password:
+    type: string
+    description: the ftp user password
+    default: passw0rd
+  ftp_path:
+    type: string
+    description: the ftp user password
+    default: /home/hcba01
+resources:
+  RServer:
+    type: OS::Nova::Server
+    properties:
+      key_name: { get_param: key_name }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash
+            # create the hcba yum repo
+            mkdir -p /etc/yum.repos.d/backup
+            mv /etc/yum.repos.d/*.repo* /etc/yum.repos.d/backup/
+            cat /dev/null > /etc/yum.repos.d/hcba.repo
+            echo "[base]" >> /etc/yum.repos.d/hcba.repo
+            echo "name=hcba-base" >> /etc/yum.repos.d/hcba.repo
+            echo "baseurl=http://repository/hcba_cloud/rhel65/base" >> /etc/yum.repos.d/hcba.repo
+            echo "enabled=1" >> /etc/yum.repos.d/hcba.repo
+            echo "gpgcheck=0" >> /etc/yum.repos.d/hcba.repo
+            echo "" >> /etc/yum.repos.d/hcba.repo
+            echo "[supp]" >> /etc/yum.repos.d/hcba.repo
+            echo "name=hcba-supp" >> /etc/yum.repos.d/hcba.repo
+            echo "baseurl=http://repository/hcba_cloud/rhel65/supp" >> /etc/yum.repos.d/hcba.repo
+            echo "enabled=1" >> /etc/yum.repos.d/hcba.repo
+            echo "gpgcheck=0" >> /etc/yum.repos.d/hcba.repo
+            echo "" >> /etc/yum.repos.d/hcba.repo
+            echo "[extras]" >> /etc/yum.repos.d/hcba.repo
+            echo "name=hcba-extras" >> /etc/yum.repos.d/hcba.repo
+            echo "baseurl=http://repository/hcba_cloud/rhel65/extras" >> /etc/yum.repos.d/hcba.repo
+            echo "enabled=1" >> /etc/yum.repos.d/hcba.repo
+            echo "gpgcheck=0" >> /etc/yum.repos.d/hcba.repo
+            yum clean all
+
+            # install vsftpd
+            yum -y install ftp vsftpd
+            chkconfig vsftpd on
+            service vsftpd start
+            userdel -r ftp_user
+            useradd  --home-dir ftp_path --create-home --base-dir ftp_path ftp_user
+            passwd ftp_user << EOF
+            ftp_password
+            ftp_password
+            EOF
+            
+            # install R
+            yum -y install wget
+            yum -y install R
+
+            export r_path=/opt
+            export rserver_file=Rserve_1.8-3.tar.gz
+            export rserver_url="http://repository/hcba_cloud/dm/R/$rserver_file"
+            wget -O $r_path/$rserver_file $rserver_url
+            R CMD INSTALL $r_path/$rserver_file
+            rm -rf $r_path/$rserver_file
+            
+            export boruta_file=Boruta_4.0.0.tar.gz
+            export boruta_url="http://repository/hcba_cloud/dm/R/$boruta_file"
+            wget -O $r_path/$boruta_file $boruta_url
+            R CMD INSTALL $r_path/$boruta_file
+            rm -rf $r_path/$boruta_file
+            
+            export c50_file=C50_0.1.0-24.tar.gz
+            export c50_url="http://repository/hcba_cloud/dm/R/$c50_file"
+            wget -O $r_path/$c50_file $c50_url
+            R CMD INSTALL $r_path/$c50_file
+            rm -rf $r_path/$c50_file
+            
+            export e1071_file=e1071_1.6-6.tar.gz
+            export e1071_url="http://repository/hcba_cloud/dm/R/$e1071_file"
+            wget -O $r_path/$e1071_file $e1071_url
+            R CMD INSTALL $r_path/$e1071_file
+            rm -rf $r_path/$e1071_file
+            
+            export mice_file=miceadds_1.3-0.tar.gz
+            export mice_url="http://repository/hcba_cloud/dm/R/$mice_file"
+            wget -O $r_path/$mice_file $mice_url
+            R CMD INSTALL $r_path/$mice_file
+            rm -rf $r_path/$mice_file
+            
+            export nnet_file=nnet_7.3-10.tar.gz
+            export nnet_url="http://repository/hcba_cloud/dm/R/$nnet_file"
+            wget -O $r_path/$nnet_file $nnet_url
+            R CMD INSTALL $r_path/$nnet_file
+            rm -rf $r_path/$nnet_file
+
+            export rscript_file=Rscript.R
+            export rscript_url="http://repository/hcba_cloud/dm/R/$rscript_file"
+            wget -O $r_path/$rscript_file $rscript_url
+            R CMD BATCH $r_path/$rscript_file
+            rm -rf $r_path/$rscript_file
+
+            yum -y install mysql
+            #service mysqld start
+            
+            export r_ip="127.0.0.1"
+            r_ip=$(ifconfig  | grep 'inet addr:'| grep -v '127.0.0.1' | cut -d: -f2 | awk '{ print $1}')
+            
+            cat << EOF | mysql -h db_host -u db_user --password=db_password
+            use db_name;
+            INSERT INTO t_model_engine (description, enginePassword, enginePort, engineTypeId, engineUserName, ftpPassword, ftpPath, ftpPort, ftpUserName, ip, name, stateId, usageTypeId, workloadConsume, workloadTrain, workloadValidate, workspaceLocation) VALUES("this is a local engine", "", 6311, 11, "", "ftp_password", "ftp_path", 21, "ftp_user", "$r_ip", "local engine", 11, 31, 0, 0, 0, "0");
+            EXIT
+            EOF
+            
+            # to disabled the selinux
+            setenforce 0
+            # to disabled the iptables
+            iptables -F
+            service iptables stop
+            chkconfig iptables off
+          params:
+            repository: { get_param: repository }
+            db_host: { get_param: db_host }
+            db_name: { get_param: db_name }
+            db_user: { get_param: db_user }
+            db_password: { get_param: db_password }
+            ftp_user: { get_param: ftp_user }
+            ftp_password: { get_param: ftp_password }
+            ftp_path: { get_param: ftp_path }
+outputs:
+  r_server_networks:
+    description: The networks of the deployed server
+    value: { get_attr: [RServer, networks] }

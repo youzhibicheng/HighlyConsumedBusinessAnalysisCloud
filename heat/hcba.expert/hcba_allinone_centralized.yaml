@@ -1,0 +1,393 @@
+#
+# This is the HOT Template to install all the following component of HCBA WEB in one server
+# hcba web server
+# hcba mysql server
+# FTP and R server
+#
+heat_template_version: 2013-05-23
+
+description: >
+  This is the HOT template to install and configure HCBA Web server.
+
+parameters:
+  key_name:
+    type: string
+    description: Name of an existing key pair to use for the server
+    default: hcba-keypair
+    constraints:
+      - custom_constraint: nova.keypair
+  image:
+    type: string
+    description: Image ID or image name to use for the server
+    default: rhel6.5
+    constraints:
+      - custom_constraint: glance.image
+  flavor:
+    type: string
+    description: Flavor for the all in one server to be created
+    default: m1.medium
+    constraints:
+      - allowed_values: [m1.tiny, m1.xsmall, m1.small, m1.medium, m1.large, m1.xlarge]
+        description: instance_type
+  repository:
+    type: string
+    description: the HCBA BASE repository IP address, you MUST fill it with actual IP address, like 192.168.56.111
+  ftp_user:
+    type: string
+    description: the ftp user
+    default: hcba_ftp
+  ftp_password:
+    type: string
+    description: the ftp user password
+    default: passw0rd
+  ftp_path:
+    type: string
+    description: the ftp user password
+    default: /home/hcba01
+  db_type:
+    type: string
+    description: HCBA WEB database type, such as MySQL, IBM DB2, Oracle and etc ...
+    default: MySQL
+    constraints:
+      - allowed_values: [MySQL, DB2, Oracle]
+        description: DataBase type       
+  web_db_name:
+    type: string
+    description: HCBA Web database name
+    default: hcbaweb
+    constraints:
+      - length: { min: 1, max: 64 }
+        description: web_db_name must be between 1 and 64 characters
+      - allowed_pattern: '[a-zA-Z][a-zA-Z0-9]*'
+        description: >
+          web_db_name must begin with a letter and contain only alphanumeric
+          characters
+  web_db_user:
+    type: string
+    description: The hcba web database account username
+    default: hcbaweb
+    constraints:
+      - length: { min: 1, max: 16 }
+        description: web_db_user must be between 1 and 16 characters
+      - allowed_pattern: '[a-zA-Z][a-zA-Z0-9]*'
+        description: >
+          web_db_user must begin with a letter and contain only alphanumeric
+          characters
+  appstore_db_name:
+    type: string
+    description: HCBA appstore database name
+    default: hcbaappstore
+    constraints:
+      - length: { min: 1, max: 64 }
+        description: appstore_db_name must be between 1 and 64 characters
+      - allowed_pattern: '[a-zA-Z][a-zA-Z0-9]*'
+        description: >
+          appstore_db_name must begin with a letter and contain only alphanumeric
+          characters
+  appstore_db_user:
+    type: string
+    description: The hcba appstore database account username
+    default: hcbaappstore
+    constraints:
+      - length: { min: 1, max: 16 }
+        description: appstore_db_user must be between 1 and 16 characters
+      - allowed_pattern: '[a-zA-Z][a-zA-Z0-9]*'
+        description: >
+          appstore_db_user must begin with a letter and contain only alphanumeric
+          characters
+  db_password:
+    type: string
+    description: The database password of root, hcba web user, appstore user
+    default: passw0rd
+    constraints:
+      - length: { min: 1, max: 41 }
+        description: db_password must be between 1 and 41 characters
+      - allowed_pattern: "[a-zA-Z0-9]+"
+        description: Password must consist of characters and numbers only
+      - allowed_pattern: "[a-zA-Z]+[a-zA-Z0-9]*"
+        description: Password must start with a character
+  md_type:
+    type: string
+    description: HCBA WEB Middleware type, such as Tomcat, Jetty, IBM WAS, Redhat JBoss, Oracle GlassFish, Oracle Fussion, Oracle Weblogic and etc ...
+    default: Jetty
+    constraints:
+      - allowed_values: [Jetty, Tomcat, WAS, JBoss, GlassFish, WebLogic]
+        description: midware type
+resources:
+  AllinoneCentralizedServer:
+    type: OS::Nova::Server
+    properties:
+      key_name: { get_param: key_name }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash
+            # create the hcba yum repo
+            mkdir -p /etc/yum.repos.d/backup
+            mv /etc/yum.repos.d/*.repo* /etc/yum.repos.d/backup/
+            cat /dev/null > /etc/yum.repos.d/hcba.repo
+            echo "[base]" >> /etc/yum.repos.d/hcba.repo
+            echo "name=hcba-base" >> /etc/yum.repos.d/hcba.repo
+            echo "baseurl=http://repository/hcba_cloud/rhel65/base" >> /etc/yum.repos.d/hcba.repo
+            echo "enabled=1" >> /etc/yum.repos.d/hcba.repo
+            echo "gpgcheck=0" >> /etc/yum.repos.d/hcba.repo
+            echo "" >> /etc/yum.repos.d/hcba.repo
+            echo "[supp]" >> /etc/yum.repos.d/hcba.repo
+            echo "name=hcba-supp" >> /etc/yum.repos.d/hcba.repo
+            echo "baseurl=http://repository/hcba_cloud/rhel65/supp" >> /etc/yum.repos.d/hcba.repo
+            echo "enabled=1" >> /etc/yum.repos.d/hcba.repo
+            echo "gpgcheck=0" >> /etc/yum.repos.d/hcba.repo
+            echo "" >> /etc/yum.repos.d/hcba.repo
+            echo "[extras]" >> /etc/yum.repos.d/hcba.repo
+            echo "name=hcba-extras" >> /etc/yum.repos.d/hcba.repo
+            echo "baseurl=http://repository/hcba_cloud/rhel65/extras" >> /etc/yum.repos.d/hcba.repo
+            echo "enabled=1" >> /etc/yum.repos.d/hcba.repo
+            echo "gpgcheck=0" >> /etc/yum.repos.d/hcba.repo
+            yum clean all
+            
+            # install vsftpd
+            yum -y install ftp vsftpd
+            chkconfig vsftpd on
+            service vsftpd start
+            userdel -r ftp_user
+            useradd  --home-dir ftp_path --create-home --base-dir ftp_path ftp_user
+            passwd ftp_user << EOF
+            ftp_password
+            ftp_password
+            EOF
+            
+            # install R
+            yum -y install wget
+            yum -y install R
+
+            export r_ip=127.0.0.1
+            export r_path=/opt
+            export r_home=/opt/R
+            
+            export rserver_file=Rserve_1.8-3.tar.gz
+            export rserver_url="http://repository/hcba_cloud/dm/R/$rserver_file"
+            wget -O $r_path/$rserver_file $rserver_url
+            R CMD INSTALL $r_path/$rserver_file
+            rm -rf $r_path/$rserver_file
+            
+            export boruta_file=Boruta_4.0.0.tar.gz
+            export boruta_url="http://repository/hcba_cloud/dm/R/$boruta_file"
+            wget -O $r_path/$boruta_file $boruta_url
+            R CMD INSTALL $r_path/$boruta_file
+            rm -rf $r_path/$boruta_file
+            
+            export c50_file=C50_0.1.0-24.tar.gz
+            export c50_url="http://repository/hcba_cloud/dm/R/$c50_file"
+            wget -O $r_path/$c50_file $c50_url
+            R CMD INSTALL $r_path/$c50_file
+            rm -rf $r_path/$c50_file
+            
+            export e1071_file=e1071_1.6-6.tar.gz
+            export e1071_url="http://repository/hcba_cloud/dm/R/$e1071_file"
+            wget -O $r_path/$e1071_file $e1071_url
+            R CMD INSTALL $r_path/$e1071_file
+            rm -rf $r_path/$e1071_file
+            
+            export mice_file=miceadds_1.3-0.tar.gz
+            export mice_url="http://repository/hcba_cloud/dm/R/$mice_file"
+            wget -O $r_path/$mice_file $mice_url
+            R CMD INSTALL $r_path/$mice_file
+            rm -rf $r_path/$mice_file
+            
+            export nnet_file=nnet_7.3-10.tar.gz
+            export nnet_url="http://repository/hcba_cloud/dm/R/$nnet_file"
+            wget -O $r_path/$nnet_file $nnet_url
+            R CMD INSTALL $r_path/$nnet_file
+            rm -rf $r_path/$nnet_file
+
+            export rscript_file=Rscript.R
+            export rscript_url="http://repository/hcba_cloud/dm/R/$rscript_file"
+            wget -O $r_path/$rscript_file $rscript_url
+            R CMD BATCH $r_path/$rscript_file
+            rm -rf $r_path/$rscript_file
+
+
+
+            # install the mysql server
+            export web_sql_schema_url=http://repository/hcba_cloud/web/hcba_web/db/web-schema.sql
+            export web_sql_init_url=http://repository/hcba_cloud/web/hcba_web/db/web-init.sql
+            wget -O /tmp/web_schema.sql $web_sql_schema_url
+            wget -O /tmp/web_init.sql $web_sql_init_url
+            
+            export appstore_sql_schema_url=http://repository/hcba_cloud/web/hcba_appstore/db/appstore-schema.sql
+            export appstore_sql_init_url=http://repository/hcba_cloud/web/hcba_appstore/db/appstore-init.sql
+            wget -O /tmp/appstore-schema.sql $appstore_sql_schema_url
+            wget -O /tmp/appstore-init.sql $appstore_sql_init_url
+
+            export host_name=$(hostname)
+            yum -y install mysql mysql-server
+            service mysqld start
+            chkconfig mysqld on
+            mysqladmin -u root password db_password
+
+            cat << EOF | mysql -u root --password=db_password
+            INSERT INTO mysql.user(Host,User,Password) values("127.0.0.1","web_db_user",password("db_password"));
+            INSERT INTO mysql.user(Host,User,Password) values("localhost","web_db_user",password("db_password"));
+            INSERT INTO mysql.user(Host,User,Password) values("$host_name","web_db_user",password("db_password"));
+            INSERT INTO mysql.user(Host,User,Password) values("%","web_db_user",password("db_password"));
+            GRANT ALL PRIVILEGES ON *.* TO "web_db_user"@"$host_name";
+            GRANT ALL PRIVILEGES ON *.* TO "web_db_user"@"localhost";
+            GRANT ALL PRIVILEGES ON *.* TO "web_db_user"@"127.0.0.1";
+            GRANT ALL PRIVILEGES ON *.* TO "web_db_user"@"%";
+            INSERT INTO mysql.user(Host,User,Password) values("127.0.0.1","appstore_db_user",password("db_password"));
+            INSERT INTO mysql.user(Host,User,Password) values("localhost","appstore_db_user",password("db_password"));
+            INSERT INTO mysql.user(Host,User,Password) values("$host_name","appstore_db_user",password("db_password"));
+            INSERT INTO mysql.user(Host,User,Password) values("%","appstore_db_user",password("db_password"));
+            GRANT ALL PRIVILEGES ON *.* TO "appstore_db_user"@"$host_name";
+            GRANT ALL PRIVILEGES ON *.* TO "appstore_db_user"@"localhost";
+            GRANT ALL PRIVILEGES ON *.* TO "appstore_db_user"@"127.0.0.1";
+            GRANT ALL PRIVILEGES ON *.* TO "appstore_db_user"@"%";
+            FLUSH PRIVILEGES;
+            EXIT
+            EOF
+
+            cat << EOF | mysql -u web_db_user --password=db_password            
+            CREATE DATABASE web_db_name;
+            use web_db_name;
+            source /tmp/web_schema.sql;
+            source /tmp/web_init.sql;
+            UPDATE t_model_engine SET ip="$r_ip", ftpUserName="ftp_user", ftpPassword="ftp_password", ftpPath="ftp_path" WHERE id='-1';
+            EXIT
+            EOF
+
+            cat << EOF | mysql -u appstore_db_user --password=db_password         
+            CREATE DATABASE appstore_db_name;
+            use appstore_db_name;
+            source /tmp/appstore-schema.sql;
+            source /tmp/appstore-init.sql;
+            EXIT
+            EOF
+
+            rm -rf /tmp/web_schema.sql
+            rm -rf /tmp/web_init.sql
+            rm -rf /tmp/appstore-schema.sql
+            rm -rf /tmp/appstore-init.sql
+
+
+
+            # install the hcba web server
+            # download and configure jetty
+            #yum -y install wget
+            yum -y install java-1.7.0 java-1.7.0-devel
+            export jetty_file=JETTY.tar.gz
+            export jetty_path=/opt
+            export jetty_home=/opt/jetty
+            export jetty_url="http://repository/hcba_cloud/web/jetty/$jetty_file"
+            wget -O $jetty_path/$jetty_file $jetty_url
+            tar -zxvf $jetty_path/$jetty_file -C $jetty_path
+            rm -rf $jetty_path/$jetty_file
+            jetty_name=`ls $jetty_path | grep jetty`
+            mv $jetty_path/$jetty_name $jetty_home
+            useradd -m jetty
+            chown -R jetty:jetty $jetty_home/
+            ln -s $jetty_home/bin/jetty.sh /etc/init.d/jetty
+
+            echo "JETTY_HOME=$jetty_home" > /etc/default/jetty
+            echo "JETTY_USER=jetty" >> /etc/default/jetty
+            echo "JETTY_PORT=8080" >> /etc/default/jetty
+            echo "JETTY_HOST=127.0.0.1" >> /etc/default/jetty
+            echo "JETTY_LOGS=$jetty_home/logs/" >> /etc/default/jetty
+
+            yum -y install zip unzip
+
+            # download and unzip hcba web war
+            export web_war_path=/tmp/hcba_web
+            export web_war_file=HCBA-WEB.war
+            mkdir -p $web_war_path
+            export web_war_url="http://repository/hcba_cloud/web/hcba_web/war/$web_war_file"
+            wget -O $web_war_path/$web_war_file $web_war_url
+            cd $web_war_path
+            jar -xvf $web_war_file
+            rm -rf $web_war_file
+            
+            # change the web war configuration file
+            export web_dbhost_orig=localhost
+            export web_dbport_orig=3306
+            export web_dbname_orig=hcba
+            export web_dbusername_orig=hcba
+            export web_dbpassword_orig=hcba1234tjibm
+            export web_db_host=127.0.0.1
+            export web_db_port=3306
+            sed -i "s#$web_dbhost_orig:$web_dbport_orig/$web_dbname_orig#$web_db_host:$web_db_port/web_db_name#g" $web_war_path/WEB-INF/classes/spring/persistence-mysql.properties
+            sed -i "s#jdbc.user=$web_dbusername_orig#jdbc.user=web_db_user#g" $web_war_path/WEB-INF/classes/spring/persistence-mysql.properties
+            sed -i "s#jdbc.pass=$web_dbpassword_orig#jdbc.pass=db_password#g" $web_war_path/WEB-INF/classes/spring/persistence-mysql.properties
+            # zip the jar and move to jetty webapps
+            jar -cvf $web_war_file *
+            mv $web_war_path/$web_war_file $jetty_home/webapps
+            rm -rf $web_war_path
+
+            # download and unzip hcba appstore war
+            export appstore_war_path=/tmp/hcba_appstore
+            export appstore_war_file=HCBA-APPSTORE.war
+            mkdir -p $appstore_war_path
+            export appstore_war_url="http://repository/hcba_cloud/web/hcba_appstore/war/$appstore_war_file"
+            wget -O $appstore_war_path/$appstore_war_file $appstore_war_url
+            cd $appstore_war_path
+            jar -xvf $appstore_war_file
+            rm -rf $appstore_war_file
+            
+            # change the appstore war configuration file
+            export appstore_dbhost_orig=localhost
+            export appstore_dbport_orig=3306
+            export appstore_dbname_orig=appstore
+            export appstore_dbusername_orig=root
+            export appstore_dbpassword_orig=root
+            export appstore_db_host=127.0.0.1
+            export appstore_db_port=3306
+            sed -i "s#$appstore_dbhost_orig:$appstore_dbport_orig/$appstore_dbname_orig#$appstore_db_host:$appstore_db_port/appstore_db_name#g" $appstore_war_path/WEB-INF/classes/persistence-mysql.properties
+            sed -i "s#jdbc.user=$appstore_dbusername_orig#jdbc.user=appstore_db_user#g" $appstore_war_path/WEB-INF/classes/persistence-mysql.properties
+            sed -i "s#jdbc.pass=$appstore_dbpassword_orig#jdbc.pass=db_password#g" $appstore_war_path/WEB-INF/classes/persistence-mysql.properties
+            sed -i "s#hibernate.connection.username=$appstore_dbusername_orig#hibernate.connection.username=appstore_db_user#g" $appstore_war_path/WEB-INF/classes/persistence-mysql.properties
+            sed -i "s#hibernate.connection.password=$appstore_dbpassword_orig#hibernate.connection.password=db_password#g" $appstore_war_path/WEB-INF/classes/persistence-mysql.properties
+            
+            # log configuration
+            export log_path=/var/log/hcba_cloud
+            export log_info_file=hcba_cloud.log
+            export log_error_file=hcba_cloud_error.log
+            export log_info_orig="\${web.root}/logs/log.log"
+            export log_info_new="$log_path/$log_info_file"
+            export log_error_orig="\${web.root}/logs/error.log"
+            export log_error_new="$log_path/$log_error_file"
+            mkdir -p $log_path
+            chmod -R 777 $log_path
+            sed -i "s#$log_info_orig#$log_info_new#g" $appstore_war_path/WEB-INF/classes/log4j.properties
+            sed -i "s#$log_error_orig#$log_error_new#g" $appstore_war_path/WEB-INF/classes/log4j.properties
+
+            # move to jetty webapps ROOT
+            mkdir -p $jetty_home/webapps/ROOT
+            mv * $jetty_home/webapps/ROOT
+            rm -rf $appstore_war_path
+
+            chkconfig --add jetty
+            chkconfig --level 345 jetty on
+            #service jetty start
+            
+            # to disabled the selinux
+            setenforce 0
+            # to disabled the iptables
+            iptables -F
+            service iptables stop
+            chkconfig iptables off
+
+            reboot
+          params:
+            repository: { get_param: repository }
+            ftp_user: { get_param: ftp_user }
+            ftp_password: { get_param: ftp_password }
+            ftp_path: { get_param: ftp_path }
+            web_db_name: { get_param: web_db_name }
+            web_db_user: { get_param: web_db_user }
+            appstore_db_name: { get_param: appstore_db_name }
+            appstore_db_user: { get_param: appstore_db_user }
+            db_password: { get_param: db_password }
+outputs:
+  server_networks:
+    description: The networks of the deployed database server
+    value: { get_attr: [AllinoneCentralizedServer, networks] }
