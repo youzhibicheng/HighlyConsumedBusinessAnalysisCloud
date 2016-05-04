@@ -15,6 +15,6 @@ function configure_ftp {
     userdel -r $ftp_user
     useradd  --home-dir $ftp_path --create-home --base-dir $ftp_path $ftp_user
     echo $ftp_password | passwd --stdin $ftp_user
-    #chown -R $ftp_user:$ftp_user $ftp_path
-    chown -R 777 $ftp_path
+    chown -R $ftp_user:$ftp_user $ftp_path
+    chmod -R 777 $ftp_path
 }

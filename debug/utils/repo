@@ -16,7 +16,7 @@ function configure_repo {
         cat /dev/null > ${repo_file}
         echo "[hcba-base]" >> ${repo_file}
         echo "name=hcba-base" >> ${repo_file}
-        if [[ -f ${repository} ]]; then
+        if [[ -d ${repository} ]]; then
             echo "baseurl=file://${repository}/rhel65/base" >> ${repo_file}
         else
             echo "baseurl=${repository}/rhel65/base" >> ${repo_file}
@@ -27,7 +27,7 @@ function configure_repo {
 
         echo "[hcba-supp]" >> ${repo_file}
         echo "name=hcba-supp" >> ${repo_file}
-        if [[ -f ${repository} ]]; then
+        if [[ -d ${repository} ]]; then
             echo "baseurl=file://${repository}/rhel65/supp" >> ${repo_file}
         else
             echo "baseurl=${repository}/rhel65/supp" >> ${repo_file}
@@ -38,7 +38,7 @@ function configure_repo {
 
         echo "[hcba-extras]" >> ${repo_file}
         echo "name=hcba-extras" >> ${repo_file}
-        if [[ -f ${repository} ]]; then
+        if [[ -d ${repository} ]]; then
             echo "baseurl=file://${repository}/rhel65/extras" >> ${repo_file}
         else
             echo "baseurl=${repository}/rhel65/extras" >> ${repo_file}

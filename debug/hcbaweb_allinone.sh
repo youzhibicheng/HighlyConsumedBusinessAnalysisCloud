@@ -3,6 +3,9 @@
 xtrace_orgin=$(set +o | grep xtrace)
 set -o xtrace
 
+# if using local repository, repository is empty
+# if using remote repository, repository should like
+# http://192.168.56.101/hcba_cloud
 export repository=""
 export db_host=127.0.0.1
 export db_port=3306
@@ -11,6 +14,7 @@ export db_name=hcbaweb
 export db_username=hcbaweb
 export db_password=passw0rd
 export r_ip=127.0.0.1
+export r_num=3
 export ftp_user=hcba_ftp
 export ftp_password=passw0rd
 export ftp_path=/home/hcba001
@@ -32,12 +36,12 @@ configure_ftp
 
 # install R
 source utils/R
-configure_r
+configure_r $r_num
 
 # install the mysql server
 source utils/mysql
-r_ip=$(ifconfig  | grep 'inet addr:'| grep -v '127.0.0.1' | cut -d: -f2 | awk '{ print $1}')
-configure_mysql_hcbaweb $db_root_password $db_name $db_username $db_password $r_ip $ftp_user $ftp_password $ftp_path
+r_ip=$(ifconfig eth0 | grep 'inet addr:'| grep -v '127.0.0.1' | cut -d: -f2 | awk '{ print $1}')
+configure_mysql_hcbaweb $db_root_password $db_name $db_username $db_password $r_ip $r_num $ftp_user $ftp_password $ftp_path
 
 # install jave
 source utils/java
