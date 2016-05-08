@@ -64,13 +64,14 @@ function configure_mysql_hcbaweb {
     db_username=$3
     db_password=$4
     r_ip=$5
-    ftp_user=$6
-    ftp_password=$7
-    ftp_path=$8
+    r_num=$6
+    ftp_user=$7
+    ftp_password=$8
+    ftp_path=$9
     schema_sql=$(get_sql_file $repository/web/hcba_web/db/web-schema.sql)
     init_sql=$(get_sql_file $repository/web/hcba_web/db/web-init.sql)
-    configure_mysql $1 $2 $3 $4 $schema_sql $init_sql
-    update_mysql_r $db_name $db_username $db_password $r_ip $ftp_user $ftp_password $ftp_path
+    configure_mysql $db_root_password $db_name $db_username $db_password $schema_sql $init_sql
+    update_mysql_r $db_name $db_username $db_password $r_ip $r_num $ftp_user $ftp_password $ftp_path
     clean_mysql
 }
 
@@ -87,14 +88,24 @@ function update_mysql_r {
     db_username=$2
     db_password=$3
     r_ip=$4
-    ftp_user=$5
-    ftp_password=$6
-    ftp_path=$7
+    r_num=$5
+    ftp_user=$6
+    ftp_password=$7
+    ftp_path=$8
     cat << EOF | mysql -u $db_username --password=$db_password
     use $db_name;
     UPDATE t_model_engine SET ip="${r_ip}", ftpUserName="$ftp_user", ftpPassword="$ftp_password", ftpPath="$ftp_path" WHERE id='-1';
     EXIT
 EOF
+    for((i=1; i<$r_num; i++))
+    do
+        (( r_port=6311+$i ))
+        cat << EOF | mysql -u $db_username --password=$db_password
+        use $db_name;
+        INSERT INTO t_model_engine (description, enginePassword, enginePort, engineTypeId, engineUserName, ftpPassword, ftpPath, ftpPort, ftpUserName, ip, name, stateId, usageTypeId, workloadConsume, workloadTrain, workloadValidate, workspaceLocation) VALUES("this is a local engine", "", "$r_port", 11, "", "$ftp_password", "$ftp_path", 21, "$ftp_user", "$r_ip", "local engine", 11, 31, 0, 0, 0, "0");
+        EXIT
+EOF
+    done
 }
 
 function update_mysql_r_slave {
@@ -106,10 +117,16 @@ function update_mysql_r_slave {
     ftp_user=$5
     ftp_password=$6
     ftp_path=$7
-    r_ip=$(ifconfig  | grep 'inet addr:'| grep -v '127.0.0.1' | cut -d: -f2 | awk '{ print $1}')
-    cat << EOF | mysql -h $db_host -u $db_username --password=$db_password
-    use $db_name;
-    INSERT INTO t_model_engine (description, enginePassword, enginePort, engineTypeId, engineUserName, ftpPassword, ftpPath, ftpPort, ftpUserName, ip, name, stateId, usageTypeId, workloadConsume, workloadTrain, workloadValidate, workspaceLocation) VALUES("this is a local engine", "", 6311, 11, "", "$ftp_password", "$ftp_path", 21, "$ftp_user", "$r_ip", "local engine", 11, 31, 0, 0, 0, "0");
-    EXIT
+    r_ip=$(ifconfig eth0 | grep 'inet addr:'| grep -v '127.0.0.1' | cut -d: -f2 | awk '{ print $1}')
+    r_num=$8
+
+    for((i=0; i<$r_num; i++))
+    do
+        (( r_port=6311+$i ))
+        cat << EOF | mysql -h $db_host -u $db_username --password=$db_password
+        use $db_name;
+        INSERT INTO t_model_engine (description, enginePassword, enginePort, engineTypeId, engineUserName, ftpPassword, ftpPath, ftpPort, ftpUserName, ip, name, stateId, usageTypeId, workloadConsume, workloadTrain, workloadValidate, workspaceLocation) VALUES("this is a local engine", "", "$r_port", 11, "", "$ftp_password", "$ftp_path", 21, "$ftp_user", "$r_ip", "local engine", 11, 31, 0, 0, 0, "0");
+        EXIT
 EOF
+    done
 }

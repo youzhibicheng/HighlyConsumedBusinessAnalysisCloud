@@ -26,6 +26,8 @@ function r_cmd_install {
     package_file=$1
     if [ -f $package_file ]; then
         R CMD INSTALL $package_file
+    elif [ -d $package_file ]; then
+        R CMD INSTALL $package_file
     else
         package_name=$(basename $package_file)
         wget -O $package_dir/$package_name $package_file
@@ -41,6 +43,7 @@ function r_cmd_install {
 function r_cmd_install_stringi {
     stringi_file=""
     if [ -d $repository ]; then
+        unzip $repository/dm/R/stringi-master.zip -d $repository/dm/R/
         stringi_file=$repository/dm/R/stringi-master
     else
         stringi_url=$repository/dm/R/stringi-master.zip
@@ -207,6 +210,7 @@ function configure_r_packages {
     
     #stringi_file="$repository/dm/R/stringi_1.0-1.tar.gz"
     #r_cmd_install $stringi_file --configure-args='--disable-pkg-config'
+    
     r_cmd_install_stringi
 
     magrittr_file="$repository/dm/R/magrittr_1.5.tar.gz"
@@ -293,6 +297,30 @@ function configure_r_packages {
     pmml_file="$repository/dm/R/pmml_1.5.0.tar.gz"
     r_cmd_install $pmml_file
     
+    # needed for cairo
+    yum -y install cairo-devel
+    
+    cairo_file="$repository/dm/R/Cairo_1.5-9.tar.gz"
+    r_cmd_install $cairo_file
+    
+    quadprog_file="$repository/dm/R/quadprog_1.5-5.tar.gz"
+    r_cmd_install $quadprog_file
+    
+    tseries_file="$repository/dm/R/tseries_0.10-34.tar.gz"
+    r_cmd_install $tseries_file
+    
+    timeDate_file="$repository/dm/R/timeDate_3012.100.tar.gz"
+    r_cmd_install $timeDate_file
+    
+    fracdiff_file="$repository/dm/R/fracdiff_1.4-2.tar.gz"
+    r_cmd_install $fracdiff_file
+    
+    RcppArmadillo_file="$repository/dm/R/RcppArmadillo_0.6.600.4.0.tar.gz"
+    r_cmd_install $RcppArmadillo_file
+    
+    forecast_file="$repository/dm/R/forecast_7.0.tar.gz"
+    r_cmd_install $forecast_file
+    
     #rscript_file="$repository/dm/R/Rscript.R"
     #R CMD BATCH $rscript_file
 }
@@ -301,8 +329,20 @@ function configure_r {
     init_r
     yum -y install R
     configure_r_packages
+    
+    # check how many instance will boot on each server
+    r_num=1
+    if [[ $# -gt 0 ]]; then
+        r_num=$1
+    fi
+    echo "create "$r_num" R instance and port begin from 6311"
     # Start Rserve as modeling engine
-    R CMD Rserve --RS-enable-remote
+    for((i=0; i<$r_num; i++))
+    do
+        (( r_port=6311+$i ))
+        R CMD Rserve --RS-port $r_port --RS-enable-remote
+    done
+    
     clean_r
 }
 

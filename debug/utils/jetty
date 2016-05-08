@@ -39,10 +39,14 @@ function configure_jetty {
     chkconfig --add jetty
     chkconfig --level 345 jetty on
     service jetty start
+    
+    yum -y install zip unzip
 }
 
 function configure_jetty_appstore {
-    war_home="${jetty_home}/webapps/appstore"
+    # in future
+    #war_home="${jetty_home}/webapps/appstore"
+    war_home="${jetty_home}/webapps/ROOT"
     war_file="$repository/web/hcba_appstore/war/HCBA-APPSTORE.war"
     if [[ ! -f $war_file ]]; then
         mkdir -p $jetty_dir
