@@ -210,7 +210,6 @@ function configure_r_packages {
     
     #stringi_file="$repository/dm/R/stringi_1.0-1.tar.gz"
     #r_cmd_install $stringi_file --configure-args='--disable-pkg-config'
-    
     r_cmd_install_stringi
 
     magrittr_file="$repository/dm/R/magrittr_1.5.tar.gz"
